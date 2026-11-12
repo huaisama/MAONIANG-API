@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReplyAPI — 假接口，真回复</title>
+<meta name="description" content="一个不靠模型、靠人回复的 API。发请求，等真人回。">
+<style>
+  :root{
+    --bg:#080b14;
+    --bg-soft:#0e1420;
+    --panel:#111827;
+    --panel-2:#0c1220;
+    --line:rgba(148,163,184,.14);
+    --line-strong:rgba(148,163,184,.26);
+    --text:#e7ecf5;
+    --muted:#8b98ad;
+    --dim:#64748b;
+    --accent:#7c5cff;
+    --accent-2:#22d3a6;
+    --accent-3:#f472b6;
+    --warn:#fbbf24;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:"Inter","PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:rgba(124,92,255,.35)}
+
+  /* 背景光 */
+  .glow{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  .glow::before,.glow::after{content:"";position:absolute;border-radius:50%;filter:blur(100px);opacity:.5}
+  .glow::before{width:720px;height:720px;left:-180px;top:-260px;background:radial-gradient(circle,#4c1d95 0%,transparent 65%)}
+  .glow::after{width:640px;height:640px;right:-200px;top:80px;background:radial-gradient(circle,#065f46 0%,transparent 65%);opacity:.32}
+  .grid-lines{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(148,163,184,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.055) 1px,transparent 1px);
+    background-size:56px 56px;
+    mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 78%);
+    -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 78%);
+  }
+  .wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* 导航 */
+  header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:rgba(8,11,20,.72);border-bottom:1px solid var(--line)}
+  .nav{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:.2px}
+  .logo{
+    width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#7c5cff,#22d3a6);color:#08111a;font-weight:800;font-size:15px;
+    box-shadow:0 6px 22px rgba(124,92,255,.4);
+  }
+  .nav nav{display:flex;gap:22px;font-size:14px;color:var(--muted);margin-left:auto}
+  .nav nav a:hover{color:var(--text)}
+  .nav .cta{
+    font-size:13px;padding:8px 14px;border-radius:9px;border:1px solid var(--line-strong);
+    color:var(--text);background:rgba(255,255,255,.03);transition:.18s
+  }
+  .nav .cta:hover{background:rgba(124,92,255,.16);border-color:rgba(124,92,255,.55)}
+
+  /* 首屏 */
+  .hero{padding:76px 0 34px;position:relative}
+  .pill{
+    display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:#c7d2e5;
+    border:1px solid var(--line-strong);background:rgba(255,255,255,.03);
+    padding:6px 12px;border-radius:999px;margin-bottom:26px
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 0 4px rgba(34,211,166,.14)}
+  .dot.live{animation:pulse 1.8s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(34,211,166,.16)}50%{box-shadow:0 0 0 7px rgba(34,211,166,.05)}}
+  h1{
+    font-size:clamp(38px,6vw,68px);line-height:1.06;margin:0 0 22px;letter-spacing:-1.6px;font-weight:750;
+  }
+  h1 .grad{background:linear-gradient(100deg,#a78bfa 0%,#7c5cff 38%,#22d3a6 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h1 .sm{display:block;font-size:.44em;letter-spacing:-.4px;color:#9aa7bd;font-weight:500;margin-top:16px}
+  .lead{font-size:17px;color:#9fb0c9;max-width:640px;margin:0 0 34px}
+  .lead b{color:#e7ecf5;font-weight:600}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:11px;
+    font-size:14.5px;font-weight:560;transition:.18s;border:1px solid transparent;cursor:pointer
+  }
+  .btn-primary{background:linear-gradient(135deg,#7c5cff,#6d4dfa);color:#fff;box-shadow:0 10px 30px -8px rgba(124,92,255,.7)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 14px 34px -8px rgba(124,92,255,.85)}
+  .btn-ghost{background:rgba(255,255,255,.04);border-color:var(--line-strong);color:var(--text)}
+  .btn-ghost:hover{background:rgba(255,255,255,.08)}
+  .micro{font-size:12.5px;color:var(--dim)}
+
+  /* 代码卡 */
+  .code-card{
+    margin-top:44px;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    background:linear-gradient(180deg,#0d1320,#0a0f1a);
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.9)
+  }
+  .code-head{display:flex;align-items:center;gap:14px;padding:10px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018)}
+  .tabs{display:flex;gap:4px}
+  .tab{
+    font-size:12.5px;padding:6px 12px;border-radius:7px;color:var(--muted);cursor:pointer;border:1px solid transparent;background:none;font-family:inherit
+  }
+  .tab:hover{color:var(--text)}
+  .tab.on{background:rgba(124,92,255,.15);border-color:rgba(124,92,255,.35);color:#d8ccff}
+  .code-head .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .keybox{
+    font-family:var(--mono);font-size:11.5px;color:#94a3b8;border:1px solid var(--line);
+    padding:5px 9px;border-radius:7px;background:rgba(0,0,0,.25);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
+  .copy{font-size:11.5px;padding:5px 10px;border-radius:7px;border:1px solid var(--line-strong);background:rgba(255,255,255,.04);color:#cbd5e1;cursor:pointer;font-family:inherit}
+  .copy:hover{background:rgba(124,92,255,.18)}
+  pre{margin:0;padding:20px 18px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.75;color:#cbd5e1;tab-size:2}
+  pre .c{color:#64748b}
+  pre .s{color:#86efac}
+  pre .k{color:#c4b5fd}
+  pre .n{color:#fbbf24}
+  pre .u{color:#7dd3fc}
+
+  /* 特性 */
+  section{padding:56px 0}
+  .sec-head{margin-bottom:26px}
+  .kicker{font-size:12px;letter-spacing:2.4px;text-transform:uppercase;color:#7c5cff;font-weight:600;margin-bottom:10px}
+  h2{font-size:clamp(24px,3.4vw,34px);margin:0 0 10px;letter-spacing:-.8px;font-weight:700}
+  .sub{color:var(--muted);font-size:15px;max-width:640px;margin:0}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .card{
+    border:1px solid var(--line);border-radius:14px;padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,.008));
+    transition:.2s
+  }
+  .card:hover{border-color:rgba(124,92,255,.4);transform:translateY(-2px)}
+  .card .ico{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.3);margin-bottom:14px;font-size:16px}
+  .card h3{font-size:15px;margin:0 0 6px}
+  .card p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.7}
+
+  /* 接口表 */
+  .ep-list{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .ep{display:grid;grid-template-columns:76px 1fr auto;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);font-size:13.5px}
+  .ep:last-child{border-bottom:0}
+  .ep:hover{background:rgba(255,255,255,.02)}
+  .verb{font-family:var(--mono);font-size:11px;font-weight:700;text-align:center;padding:3px 0;border-radius:6px;letter-spacing:.5px}
+  .v-get{color:#7dd3fc;background:rgba(56,189,248,.13);border:1px solid rgba(56,189,248,.3)}
+  .v-post{color:#86efac;background:rgba(34,197,94,.13);border:1px solid rgba(34,197,94,.3)}
+  .v-any{color:#c4b5fd;background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.32)}
+  .ep code{font-family:var(--mono);color:#dbe4f3;font-size:13px}
+  .ep .desc{color:var(--muted);font-size:12.5px;text-align:right}
+
+  /* 流程 */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;counter-reset:s}
+  .step{position:relative;border:1px dashed var(--line-strong);border-radius:14px;padding:22px 20px 20px;background:rgba(255,255,255,.015)}
+  .step::before{
+    counter-increment:s;content:counter(s);
+    font-family:var(--mono);font-size:12px;color:#0a0f1a;font-weight:700;
+    width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#a78bfa,#22d3a6);
+    display:grid;place-items:center;margin-bottom:12px
+  }
+  .step h3{font-size:14.5px;margin:0 0 6px}
+  .step p{margin:0;font-size:13px;color:var(--muted)}
+
+  /* 实验台 */
+  .play{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:linear-gradient(180deg,#0d1320,#090e18)}
+  .play-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .play-head h3{font-size:14px;margin:0;font-weight:600}
+  .play-head .hint{margin-left:auto;font-size:12px;color:var(--dim)}
+  .play-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:860px){.play-body{grid-template-columns:1fr}}
+  .play-form{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;gap:8px}
+  select,input,textarea{
+    font-family:var(--mono);font-size:12.5px;color:#dbe4f3;background:#0a101d;border:1px solid var(--line-strong);
+    border-radius:8px;padding:8px 10px;outline:none;width:100%
+  }
+  select:focus,input:focus,textarea:focus{border-color:rgba(124,92,255,.6);box-shadow:0 0 0 3px rgba(124,92,255,.12)}
+  textarea{resize:vertical;min-height:120px;line-height:1.6}
+  .play-out{padding:16px;background:#080d16;min-height:260px}
+  .out-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .status-code{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:6px;background:rgba(148,163,184,.12);color:#cbd5e1}
+  .out-body{font-family:var(--mono);font-size:12px;line-height:1.7;color:#b8c6dc;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+  .waiting{display:flex;align-items:center;gap:10px;color:#fbbf24;font-family:var(--mono);font-size:12.5px}
+  .spin{width:12px;height:12px;border-radius:50%;border:2px solid rgba(251,191,36,.3);border-top-color:#fbbf24;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* 底 */
+  footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--dim);font-size:12.5px}
+  .foot{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .foot .right{margin-left:auto}
+  .warn{color:#fbbf24}
+  code.inline{font-family:var(--mono);font-size:12px;background:rgba(148,163,184,.12);padding:2px 6px;border-radius:5px;color:#cbd5e1}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="grid-lines"></div>
+
+<header>
+  <div class="nav">
+    <a class="brand" href="/"><span class="logo">M</span> MAONIANG API</a>
+    <nav>
+      <a href="#quick">快速开始</a>
+      <a href="#endpoints">接口</a>
+      <a href="#how">工作原理</a>
+      <a href="#playground">在线调试</a>
+    </nav>
+    <a class="cta" href="/admin">控制台 ↗</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero" style="padding-bottom:0">
+    <div class="pill"><span class="dot live" id="liveDot"></span><span id="liveText">正在连接服务…</span></div>
+    <h1>
+      “真”接口，<span class="grad">真回复。</span>
+      <span class="sm">没有模型，没有推理，只有一个猫娘在看你的请求。</span>
+    </h1>
+    <p class="lead">
+      任何发往 <code class="inline">/v1</code>、<code class="inline">/api</code>、<code class="inline">/mock</code> 的请求都会被挂起，
+      在控制台里由<b>猫娘</b>手写响应体再返回。兼容 OpenAI 的调用格式，用你现有的 SDK 就能直接打过来。
+    </p>
+    <div class="actions">
+      <a class="btn btn-primary" href="#quick">复制接入代码</a>
+      <a class="btn btn-ghost" href="/admin">打开控制台 →</a>
+      <span class="micro" id="statLine">…</span>
+    </div>
+
+    <div class="code-card" id="quick">
+      <div class="code-head">
+        <div class="tabs">
+          <button class="tab on" data-lang="curl">cURL</button>
+          <button class="tab" data-lang="python">Python</button>
+          <button class="tab" data-lang="node">Node.js</button>
+        </div>
+        <div class="right">
+          <span class="keybox" id="keyBox">API Key 加载中…</span>
+          <button class="copy" id="copyKey">复制</button>
+        </div>
+      </div>
+      <pre id="codeBlock">…</pre>
+    </div>
+  </section>
+
+  <section id="endpoints">
+    <div class="sec-head">
+      <div class="kicker">Endpoints</div>
+      <h2>所有接口，都是猫娘在回</h2>
+      <p class="sub">鉴权用 <code class="inline">Authorization: Bearer &lt;key&gt;</code>。默认长连接等待，超时返回 504；加 <code class="inline">?nowait=1</code> 则立即拿到回执，再轮询取结果。</p>
+    </div>
+    <div class="ep-list">
+      <div class="ep"><span class="verb v-post">POST</span><span><code>/v1/chat/completions</code> · <code>/chat/completions</code><div class="desc" style="text-align:left;margin-top:2px">OpenAI 兼容，支持 stream:true 时按 SSE 回放手写的内容</div></span><span class="desc">核心接口</span></div>
+      <div class="ep"><span class="verb v-get">GET</span><span><code>/models</code> · <code>/v1/models</code><div class="desc" style="text-align:left;margin-top:2px">模型清单，免鉴权；baseURL 带不带 <code>/v1</code> 都能取到</div></span><span class="desc">自动</span></div>
+      <div class="ep"><span class="verb v-any">ANY</span><span><code>/api/*</code><div class="desc" style="text-align:left;margin-top:2px">任意路径、任意方法，原样丢进人工队列</div></span><span class="desc">万能</span></div>
+      <div class="ep"><span class="verb v-any">ANY</span><span><code>/mock/*</code><div class="desc" style="text-align:left;margin-top:2px">同上，可自定义状态码 / 头 / Content-Type</div></span><span class="desc">万能</span></div>
+      <div class="ep"><span class="verb v-get">GET</span><span><code>/public/requests/&lt;id&gt;</code><div class="desc" style="text-align:left;margin-top:2px">nowait 模式下查询人工回复结果</div></span><span class="desc">轮询</span></div>
+      <div class="ep"><span class="verb v-get">GET</span><span><code>/public/stats</code><div class="desc" style="text-align:left;margin-top:2px">全站请求数、平均人工响应耗时</div></span><span class="desc">公开</span></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sec-head">
+      <div class="kicker">How it works</div>
+      <h2>三步，一个循环</h2>
+      <p class="sub">它不只是个 mock —— 响应体永远由人现场写，所以能返回任何东西，包括你想让客户端看到的那句话。</p>
+    </div>
+    <div class="steps">
+      <div class="step"><h3>调用方发请求</h3><p>SDK / curl / 任何 HTTP 客户端，指向这个站点，带 key 就行。请求体、header、路径全部记录。</p></div>
+      <div class="step"><h3>请求进入队列</h3><p>连接保持挂起，控制台里出现一条待回复卡片，带倒计时、来源 IP 和原始报文。</p></div>
+      <div class="step"><h3>人写，立刻返回</h3><p>你填状态码、Content-Type、响应体，Ctrl+Enter 发送。挂起的连接当场拿到你写的东西。</p></div>
+    </div>
+  </section>
+
+  <section id="playground">
+    <div class="sec-head">
+      <div class="kicker">Playground</div>
+      <h2>现在试一发</h2>
+      <p class="sub">这里发出的请求会真的进入控制台队列 —— 你在另一个窗口回复，这边就会亮出来。没有管理员在线时会一直转圈直到超时。</p>
+    </div>
+    <div class="play">
+      <div class="play-head">
+        <h3>请求</h3>
+        <span class="hint">以 nowait 模式发送，随后轮询结果</span>
+      </div>
+      <div class="play-body">
+        <div class="play-form">
+          <div class="row">
+            <select id="pgMethod" style="width:110px">
+              <option>POST</option><option>GET</option><option>PUT</option><option>DELETE</option>
+            </select>
+            <input id="pgPath" value="/v1/chat/completions" spellcheck="false">
+          </div>
+          <textarea id="pgBody" spellcheck="false">{
+  "model": "reply-1",
+  "messages": [
+    { "role": "user", "content": "你好，人工在吗？" }
+  ]
+}</textarea>
+          <div class="row">
+            <button class="btn btn-primary" id="pgSend" style="flex:1;justify-content:center">发送请求</button>
+            <button class="btn btn-ghost" id="pgReset">重置</button>
+          </div>
+        </div>
+        <div class="play-out">
+          <div class="out-head"><span>响应</span><span class="status-code" id="pgStatus">—</span><span id="pgMeta"></span></div>
+          <div class="out-body" id="pgOut">还没有响应。点击「发送请求」后，去控制台回复这条请求。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span class="brand" style="font-size:13px"><span class="logo" style="width:22px;height:22px;border-radius:6px;font-size:11px">M</span> MAONIANG API</span>
+    <span>人工回复型假 API · 仅用于演示与联调</span>
+    <span class="right warn">请勿把真实业务数据发进来</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var base = location.origin;
+  var apiKey = '';
+  var lang = 'curl';
+  var openaiUrl = base + '/v1/chat/completions';
+
+  function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+
+  var samples = {
+    curl: function(){
+      return '<span class="c"># 发一条 OpenAI 兼容的请求，然后等真人回</span>\n' +
+        'curl <span class="u">' + base + '/v1/chat/completions</span> \\\n' +
+        '  -H <span class="s">"Authorization: Bearer ' + (apiKey || '&lt;your-key&gt;') + '"</span> \\\n' +
+        '  -H <span class="s">"Content-Type: application/json"</span> \\\n' +
+        '  -d <span class="s">\'{\n    "model": "reply-1",\n    "messages": [{"role":"user","content":"随便问点什么"}]\n  }\'</span>';
+    },
+    python: function(){
+      return '<span class="c"># 直接用 openai SDK，只改 base_url</span>\n' +
+        '<span class="k">from</span> openai <span class="k">import</span> OpenAI\n\n' +
+        'client = OpenAI(\n' +
+        '    base_url=<span class="s">"' + base + '/v1"</span>,\n' +
+        '    api_key=<span class="s">"' + (apiKey || '&lt;your-key&gt;') + '"</span>,\n' +
+        ')\n\n' +
+        'resp = client.chat.completions.create(\n' +
+        '    model=<span class="s">"reply-1"</span>,\n' +
+        '    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"人工在吗"</span>}],\n' +
+        ')\n' +
+        '<span class="k">print</span>(resp.choices[<span class="n">0</span>].message.content)';
+    },
+    node: function(){
+      return '<span class="c">// 原生 fetch，await 期间管理员在网页里写回复</span>\n' +
+        '<span class="k">const</span> r = <span class="k">await</span> fetch(<span class="s">"' + openaiUrl + '"</span>, {\n' +
+        '  method: <span class="s">"POST"</span>,\n' +
+        '  headers: {\n' +
+        '    <span class="s">"Content-Type"</span>: <span class="s">"application/json"</span>,\n' +
+        '    <span class="s">"Authorization"</span>: <span class="s">"Bearer ' + (apiKey || '&lt;your-key&gt;') + '"</span>,\n' +
+        '  },\n' +
+        '  body: JSON.stringify({\n' +
+        '    model: <span class="s">"reply-1"</span>,\n' +
+        '    messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"人工在吗"</span> }],\n' +
+        '  }),\n' +
+        '});\n\n' +
+        '<span class="k">const</span> data = <span class="k">await</span> r.json();\n' +
+        'console.log(data.choices[<span class="n">0</span>].message.content);';
+    }
+  };
+
+  function render(){ document.getElementById('codeBlock').innerHTML = samples[lang](); }
+
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+      t.classList.add('on');
+      lang = t.dataset.lang;
+      render();
+    });
+  });
+
+  document.getElementById('copyKey').addEventListener('click', function(){
+    if(!apiKey) return;
+    navigator.clipboard.writeText(apiKey).then(function(){
+      var b = document.getElementById('copyKey');
+      b.textContent = '已复制';
+      setTimeout(function(){ b.textContent = '复制'; }, 1400);
+    });
+  });
+
+  function loadConfig(){
+    fetch('/public/config').then(function(r){ return r.json(); }).then(function(c){
+      apiKey = c.apiKey || '';
+      document.getElementById('keyBox').textContent = apiKey || '（Key 未公开，请到控制台查看）';
+      render();
+    }).catch(function(){
+      document.getElementById('keyBox').textContent = '（无法获取配置）';
+      render();
+    });
+  }
+
+  function loadStats(){
+    fetch('/public/stats').then(function(r){ return r.json(); }).then(function(s){
+      var live = document.getElementById('liveText');
+      live.textContent = s.pending > 0
+        ? '服务在线 · ' + s.pending + ' 个请求正在等人工回复'
+        : '服务在线 · 队列空闲';
+      document.getElementById('statLine').textContent =
+        '累计 ' + s.requests + ' 次调用 · 已人工回复 ' + s.answered + ' 次 · 平均 ' + s.avgReplySeconds + 's';
+    }).catch(function(){
+      document.getElementById('liveText').textContent = '无法连接服务';
+      document.getElementById('liveDot').classList.remove('live');
+    });
+  }
+
+  loadConfig(); render(); loadStats();
+  setInterval(loadStats, 8000);
+
+  // playground
+  var pgSend = document.getElementById('pgSend');
+  var pgOut = document.getElementById('pgOut');
+  var pgStatus = document.getElementById('pgStatus');
+  var pgMeta = document.getElementById('pgMeta');
+  var pollTimer = null;
+
+  function setOut(text, status, meta){
+    pgOut.textContent = text;
+    pgStatus.textContent = status == null ? '—' : String(status);
+    pgMeta.textContent = meta || '';
+  }
+
+  pgSend.addEventListener('click', function(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    var method = document.getElementById('pgMethod').value;
+    var path = document.getElementById('pgPath').value.trim() || '/v1/chat/completions';
+    var bodyText = document.getElementById('pgBody').value;
+    var headers = { 'Content-Type': 'application/json' };
+    if(apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+
+    pgSend.disabled = true;
+    setOut('发送中…', null, '');
+    var t0 = Date.now();
+    fetch(path + (path.indexOf('?') >= 0 ? '&' : '?') + 'nowait=1', {
+      method: method,
+      headers: headers,
+      body: method === 'GET' || method === 'HEAD' ? undefined : bodyText,
+    }).then(function(r){
+      return r.text().then(function(t){ return { status: r.status, text: t }; });
+    }).then(function(res){
+      var json = null;
+      try { json = JSON.parse(res.text); } catch(e) {}
+      if(res.status === 202 && json && json.id){
+        setOut('已进入人工队列，等待管理员回复…\n\n' + res.text, 202, '  →  ' + (Date.now() - t0) + 'ms');
+        startPoll(json.id, t0);
+      } else {
+        setOut(res.text, res.status, '  →  ' + (Date.now() - t0) + 'ms');
+        pgSend.disabled = false;
+      }
+    }).catch(function(e){
+      setOut('请求失败：' + e.message, null, '');
+      pgSend.disabled = false;
+    });
+  });
+
+  function startPoll(id, t0){
+    var began = Date.now();
+    pollTimer = setInterval(function(){
+      fetch('/public/requests/' + id).then(function(r){ return r.json(); }).then(function(j){
+        var elapsed = ((Date.now() - began) / 1000).toFixed(0);
+        if(j.status === 'answered'){
+          clearInterval(pollTimer); pollTimer = null;
+          var body = j.answer ? j.answer.body : '';
+          setOut(body, j.answer ? j.answer.status : 200, '  →  人工等待 ' + (j.wait_ms/1000).toFixed(1) + 's');
+          pgSend.disabled = false;
+        } else if(j.status === 'timeout'){
+          clearInterval(pollTimer); pollTimer = null;
+          setOut('等待人工回复超时（' + elapsed + 's）。请求 ' + id + ' 留在历史记录里。', 504, '');
+          pgSend.disabled = false;
+        } else if(j.status === 'cancelled'){
+          clearInterval(pollTimer); pollTimer = null;
+          setOut('管理员取消了这条请求。', 499, '');
+          pgSend.disabled = false;
+        } else {
+          setOut('等待中… 已 ' + elapsed + 's\n\n请求 id: ' + id + '\n去 /admin 控制台回复它。', 202, '');
+        }
+      }).catch(function(){});
+    }, 1500);
+  }
+
+  document.getElementById('pgReset').addEventListener('click', function(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    document.getElementById('pgMethod').value = 'POST';
+    document.getElementById('pgPath').value = '/v1/chat/completions';
+    document.getElementById('pgBody').value = '{\n  "model": "reply-1",\n  "messages": [\n    { "role": "user", "content": "你好，人工在吗？" }\n  ]\n}';
+    setOut('还没有响应。点击「发送请求」后，去控制台回复这条请求。', null, '');
+    pgSend.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

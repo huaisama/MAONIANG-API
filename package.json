@@ -1,0 +1,13 @@
+{
+  "name": "replyapi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "人工回复的假 API：请求会被挂起，由管理员在控制台手写响应体后返回",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
